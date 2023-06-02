@@ -1,77 +1,40 @@
-#include <linux/module.h>	
-#include <linux/kernel.h>
-#include <linux/sched.h>
-#include <linux/timer.h>
-#include <linux/init.h>
-#include <linux/gpio.h>
-
-#define LED1	4
-
-static struct timer_list blink_timer;
-
-/*
- * Timer function called periodically
- */
-static void blink_timer_func(unsigned long data)
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <linux/input.h>
+int main()
 {
-	printk(KERN_INFO "%s\n", __func__);
-
-	gpio_set_value(LED1, data); 
-	
-	/* schedule next execution */
-	blink_timer.data = !data;						// makes the LED toggle 
-	blink_timer.expires = jiffies + (1*HZ); 		// 1 sec.
-	add_timer(&blink_timer);
+ int fd;
+ struct input_event ev;
+ fd = open("/dev/input/event2", O_RDONLY);
+ if (fd == -1)
+ {
+ perror("Ошибка при открытии устройства клавиатуры");
+ exit(EXIT_FAILURE);
+ }
+ // Бесконечный цикл чтения событий клавиатуры
+ for (;;)
+ {
+ // Чтение очередного события
+ read(fd, &ev, sizeof(struct input_event));
+ if (ev.type == EV_KEY && ev.value == 1)
+ {
+ // Обработка события нажатия клавиши
+ switch (ev.code)
+ {
+ case KEY_A:
+ printf(" \nклавиша 'A'\n");
+ break;
+ case KEY_B:
+ printf(" \nклавиша 'B' \n");
+ break;
+ default:
+ printf(" \nдругая клавиша\n");
+ break;
+ }
+ }
+ }
+ close(fd);
+ return 0;
 }
-
-/*
- * Module init function
- */
-static int __init gpiomod_init(void)
-{
-	int ret = 0;
-
-	printk(KERN_INFO "%s\n", __func__);
-
-	// register, turn off 
-	ret = gpio_request_one(LED1, GPIOF_OUT_INIT_LOW, "led1");
-
-	if (ret) {
-		printk(KERN_ERR "Unable to request GPIOs: %d\n", ret);
-		return ret;
-	}
-
-	/* init timer, add timer function */
-	init_timer(&blink_timer);
-
-	blink_timer.function = blink_timer_func;
-	blink_timer.data = 1L;							// initially turn LED on
-	blink_timer.expires = jiffies + (1*HZ); 		// 1 sec.
-	add_timer(&blink_timer);
-
-	return ret;
-}
-
-/*
- * Module exit function
- */
-static void __exit gpiomod_exit(void)
-{
-	printk(KERN_INFO "%s\n", __func__);
-
-	// deactivate timer if running
-	del_timer_sync(&blink_timer);
-
-	// turn LED off
-	gpio_set_value(LED1, 0); 
-	
-	// unregister GPIO 
-	gpio_free(LED1);
-}
-
-MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Stefan Wendler");
-MODULE_DESCRIPTION("Basic kernel module using a timer and GPIOs to flash a LED.");
-
-module_init(gpiomod_init);
-module_exit(gpiomod_exit);
